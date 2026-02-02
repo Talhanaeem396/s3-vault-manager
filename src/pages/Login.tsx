@@ -39,11 +39,8 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
-              <FolderOpen className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <img src="/logo.svg" alt="Logo" className="h-10 w-auto" />
           </div>
-          <CardTitle className="text-2xl font-bold">File Manager</CardTitle>
           <CardDescription>
             Sign in to access your files
           </CardDescription>
@@ -83,9 +80,6 @@ export default function Login() {
               )}
             </Button>
           </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Contact your administrator if you need an account
-          </p>
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface S3File {
@@ -13,10 +12,22 @@ export function useS3() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const getAuthHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+
+    return btoa(binary);
+  };
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token');
     return {
-      'Authorization': `Bearer ${session?.access_token}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
   };
@@ -24,16 +35,15 @@ export function useS3() {
   const listFiles = useCallback(async (prefix: string = '') => {
     setIsLoading(true);
     try {
-      const headers = await getAuthHeaders();
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/s3-operations`);
-      url.searchParams.set('action', 'list');
+      const headers = getAuthHeaders();
+      const url = new URL('/api/files', window.location.origin);
       if (prefix) url.searchParams.set('prefix', prefix);
 
       const response = await fetch(url.toString(), { headers });
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error);
-      setFiles(data.files);
+      if (!response.ok) throw new Error(data.error || 'Failed to list files');
+      setFiles(data.files || []);
     } catch (error) {
       toast({
         title: 'Failed to list files',
@@ -47,16 +57,15 @@ export function useS3() {
 
   const downloadFile = useCallback(async (key: string) => {
     try {
-      const headers = await getAuthHeaders();
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/s3-operations`);
-      url.searchParams.set('action', 'download');
+      const headers = getAuthHeaders();
+      const url = new URL('/api/files/download', window.location.origin);
       url.searchParams.set('key', key);
 
       const response = await fetch(url.toString(), { headers });
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error);
-      
+      if (!response.ok) throw new Error(data.error || 'Failed to download file');
+
       window.open(data.url, '_blank');
     } catch (error) {
       toast({
@@ -69,12 +78,11 @@ export function useS3() {
 
   const uploadFile = useCallback(async (key: string, file: File) => {
     try {
-      const headers = await getAuthHeaders();
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/s3-operations`);
-      url.searchParams.set('action', 'upload');
+      const headers = getAuthHeaders();
+      const url = new URL('/api/files/upload', window.location.origin);
 
       const arrayBuffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const base64 = arrayBufferToBase64(arrayBuffer);
 
       const response = await fetch(url.toString(), {
         method: 'POST',
@@ -87,7 +95,7 @@ export function useS3() {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || 'Failed to upload file');
 
       toast({
         title: 'File uploaded',
@@ -107,9 +115,8 @@ export function useS3() {
 
   const deleteFile = useCallback(async (key: string) => {
     try {
-      const headers = await getAuthHeaders();
-      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/s3-operations`);
-      url.searchParams.set('action', 'delete');
+      const headers = getAuthHeaders();
+      const url = new URL('/api/files', window.location.origin);
       url.searchParams.set('key', key);
 
       const response = await fetch(url.toString(), {
@@ -118,7 +125,7 @@ export function useS3() {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || 'Failed to delete file');
 
       toast({
         title: 'File deleted',
@@ -136,6 +143,59 @@ export function useS3() {
     }
   }, [toast]);
 
+  const copyFile = useCallback(async (sourceKey: string, destinationKey: string) => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/files/copy', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ sourceKey, destinationKey }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to copy');
+
+      toast({
+        title: 'Copied',
+        description: 'File copied successfully.',
+      });
+      return true;
+    } catch (error) {
+      toast({
+        title: 'Copy failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [toast]);
+
+  const createFolder = useCallback(async (key: string) => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/folders', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to create folder');
+
+      toast({
+        title: 'Folder created',
+        description: 'Your folder is ready.',
+      });
+
+      return true;
+    } catch (error) {
+      toast({
+        title: 'Failed to create folder',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [toast]);
+
   return {
     files,
     isLoading,
@@ -143,5 +203,7 @@ export function useS3() {
     downloadFile,
     uploadFile,
     deleteFile,
+    createFolder,
+    copyFile,
   };
 }

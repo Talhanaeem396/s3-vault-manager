@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,13 +37,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
@@ -59,11 +51,9 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface UserProfile {
   id: string;
-  user_id: string;
   email: string;
   full_name: string | null;
   created_at: string;
-  role: 'admin' | 'user';
 }
 
 interface ActivityLog {
@@ -72,7 +62,7 @@ interface ActivityLog {
   file_path: string;
   file_name: string | null;
   created_at: string;
-  user_id: string;
+  user_email: string | null;
 }
 
 export default function Admin() {
@@ -89,7 +79,6 @@ export default function Admin() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
   const [isCreating, setIsCreating] = useState(false);
 
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
@@ -108,28 +97,18 @@ export default function Admin() {
     }
   }, [isAdmin]);
 
+  const getAuthHeaders = () => ({
+    Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+    'Content-Type': 'application/json',
+  });
+
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (profilesError) throw profilesError;
-
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
-      const usersWithRoles = (profiles || []).map((profile) => ({
-        ...profile,
-        role: roles?.find((r) => r.user_id === profile.user_id)?.role || 'user',
-      }));
-
-      setUsers(usersWithRoles as UserProfile[]);
+      const response = await fetch('/api/admin/users', { headers: getAuthHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to load users');
+      setUsers(data.users || []);
     } catch (error) {
       toast({
         title: 'Error loading users',
@@ -144,14 +123,10 @@ export default function Admin() {
   const fetchLogs = async () => {
     setIsLoadingLogs(true);
     try {
-      const { data, error } = await supabase
-        .from('file_activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setLogs(data || []);
+      const response = await fetch('/api/admin/logs', { headers: getAuthHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to load logs');
+      setLogs(data.logs || []);
     } catch (error) {
       toast({
         title: 'Error loading activity logs',
@@ -168,28 +143,18 @@ export default function Admin() {
 
     setIsCreating(true);
     try {
-      // Create user via edge function (admin action)
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: newUserEmail,
-            password: newUserPassword,
-            fullName: newUserName,
-            role: newUserRole,
-          }),
-        }
-      );
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          email: newUserEmail,
+          password: newUserPassword,
+          fullName: newUserName,
+        }),
+      });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || 'Failed to create user');
 
       toast({
         title: 'User created',
@@ -200,7 +165,6 @@ export default function Admin() {
       setNewUserEmail('');
       setNewUserPassword('');
       setNewUserName('');
-      setNewUserRole('user');
       fetchUsers();
     } catch (error) {
       toast({
@@ -218,22 +182,13 @@ export default function Admin() {
 
     setIsDeleting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId: userToDelete.user_id }),
-        }
-      );
+      const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || 'Failed to delete user');
 
       toast({
         title: 'User deleted',
@@ -315,7 +270,6 @@ export default function Admin() {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
@@ -325,16 +279,11 @@ export default function Admin() {
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">{u.email}</TableCell>
                       <TableCell>{u.full_name || '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
-                          {u.role}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatDistanceToNow(new Date(u.created_at), { addSuffix: true })}
                       </TableCell>
                       <TableCell>
-                        {u.user_id !== user?.id && (
+                        {u.id !== user?.id && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -443,18 +392,6 @@ export default function Admin() {
                 onChange={(e) => setNewUserName(e.target.value)}
                 placeholder="John Doe"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as 'admin' | 'user')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <DialogFooter>

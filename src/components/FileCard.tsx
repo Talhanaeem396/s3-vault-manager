@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive } from 'lucide-react';
+import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive, Copy, FolderInput } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface FileCardProps {
@@ -28,6 +28,9 @@ interface FileCardProps {
   };
   onDownload: (key: string) => void;
   onDelete: (key: string) => Promise<boolean>;
+  onCopyUrl?: (key: string) => void;
+  onOpen?: (key: string) => void;
+  onCopyTo?: (key: string) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -60,12 +63,13 @@ function getFileIcon(fileName: string) {
   return <FileIcon className="h-8 w-8 text-muted-foreground" />;
 }
 
-export function FileCard({ file, onDownload, onDelete }: FileCardProps) {
+export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopyTo }: FileCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  const fileName = file.key.split('/').pop() || file.key;
   const isFolder = file.key.endsWith('/');
+  const fileKeyTrimmed = isFolder ? file.key.replace(/\/$/, '') : file.key;
+  const fileName = fileKeyTrimmed.split('/').pop() || fileKeyTrimmed;
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -78,7 +82,14 @@ export function FileCard({ file, onDownload, onDelete }: FileCardProps) {
 
   return (
     <>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer group">
+      <Card
+        className="hover:shadow-md transition-shadow cursor-pointer group"
+        onClick={() => {
+          if (isFolder && onOpen) {
+            onOpen(file.key);
+          }
+        }}
+      >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0">
@@ -104,6 +115,7 @@ export function FileCard({ file, onDownload, onDelete }: FileCardProps) {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(event) => event.stopPropagation()}
                 >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
@@ -113,6 +125,18 @@ export function FileCard({ file, onDownload, onDelete }: FileCardProps) {
                   <Download className="mr-2 h-4 w-4" />
                   Download
                 </DropdownMenuItem>
+                {onCopyUrl && (
+                  <DropdownMenuItem onClick={() => onCopyUrl(file.key)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy URL
+                  </DropdownMenuItem>
+                )}
+                {onCopyTo && (
+                  <DropdownMenuItem onClick={() => onCopyTo(file.key)}>
+                    <FolderInput className="mr-2 h-4 w-4" />
+                    Copy to...
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
                   className="text-destructive focus:text-destructive"
