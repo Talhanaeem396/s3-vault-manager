@@ -11,7 +11,7 @@ dotenv.config();
 
 const app = express();
 
-const PORT = Number(process.env.SERVER_PORT || 3001);
+const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:8080";
 const TOKEN_TTL_DAYS = Number(process.env.TOKEN_TTL_DAYS || 7);
 
@@ -500,7 +500,7 @@ app.get("/api/admin/logs", requireAdmin, async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
   console.log(`API server running on http://localhost:${PORT}`);
 });
