@@ -20,6 +20,7 @@ const TOKEN_KEY = 'auth_token';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const apiBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
   useEffect(() => {
     const loadSession = async () => {
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const response = await fetch('/api/me', {
+        const response = await fetch(new URL('/api/me', apiBase).toString(), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
@@ -49,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(new URL('/api/login', apiBase).toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
-      await fetch('/api/logout', {
+      await fetch(new URL('/api/logout', apiBase).toString(), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

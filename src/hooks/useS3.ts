@@ -11,6 +11,7 @@ export function useS3() {
   const [files, setFiles] = useState<S3File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const apiBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
   const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
     const bytes = new Uint8Array(buffer);
@@ -36,7 +37,7 @@ export function useS3() {
     setIsLoading(true);
     try {
       const headers = getAuthHeaders();
-      const url = new URL('/api/files', window.location.origin);
+      const url = new URL('/api/files', apiBase);
       if (prefix) url.searchParams.set('prefix', prefix);
 
       const response = await fetch(url.toString(), { headers });
@@ -58,7 +59,7 @@ export function useS3() {
   const downloadFile = useCallback(async (key: string) => {
     try {
       const headers = getAuthHeaders();
-      const url = new URL('/api/files/download', window.location.origin);
+      const url = new URL('/api/files/download', apiBase);
       url.searchParams.set('key', key);
 
       const response = await fetch(url.toString(), { headers });
@@ -79,7 +80,7 @@ export function useS3() {
   const uploadFile = useCallback(async (key: string, file: File) => {
     try {
       const headers = getAuthHeaders();
-      const url = new URL('/api/files/upload', window.location.origin);
+      const url = new URL('/api/files/upload', apiBase);
 
       const arrayBuffer = await file.arrayBuffer();
       const base64 = arrayBufferToBase64(arrayBuffer);
@@ -116,7 +117,7 @@ export function useS3() {
   const deleteFile = useCallback(async (key: string) => {
     try {
       const headers = getAuthHeaders();
-      const url = new URL('/api/files', window.location.origin);
+      const url = new URL('/api/files', apiBase);
       url.searchParams.set('key', key);
 
       const response = await fetch(url.toString(), {
@@ -146,7 +147,7 @@ export function useS3() {
   const copyFile = useCallback(async (sourceKey: string, destinationKey: string) => {
     try {
       const headers = getAuthHeaders();
-      const response = await fetch('/api/files/copy', {
+      const response = await fetch(new URL('/api/files/copy', apiBase).toString(), {
         method: 'POST',
         headers,
         body: JSON.stringify({ sourceKey, destinationKey }),
@@ -172,7 +173,7 @@ export function useS3() {
   const createFolder = useCallback(async (key: string) => {
     try {
       const headers = getAuthHeaders();
-      const response = await fetch('/api/folders', {
+      const response = await fetch(new URL('/api/folders', apiBase).toString(), {
         method: 'POST',
         headers,
         body: JSON.stringify({ key }),

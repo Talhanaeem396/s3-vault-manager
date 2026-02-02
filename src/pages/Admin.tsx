@@ -69,6 +69,7 @@ export default function Admin() {
   const { user, isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const apiBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -105,7 +106,7 @@ export default function Admin() {
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const response = await fetch('/api/admin/users', { headers: getAuthHeaders() });
+      const response = await fetch(new URL('/api/admin/users', apiBase).toString(), { headers: getAuthHeaders() });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to load users');
       setUsers(data.users || []);
@@ -123,7 +124,7 @@ export default function Admin() {
   const fetchLogs = async () => {
     setIsLoadingLogs(true);
     try {
-      const response = await fetch('/api/admin/logs', { headers: getAuthHeaders() });
+      const response = await fetch(new URL('/api/admin/logs', apiBase).toString(), { headers: getAuthHeaders() });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to load logs');
       setLogs(data.logs || []);
@@ -143,7 +144,7 @@ export default function Admin() {
 
     setIsCreating(true);
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch(new URL('/api/admin/users', apiBase).toString(), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -182,7 +183,7 @@ export default function Admin() {
 
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
+      const response = await fetch(new URL(`/api/admin/users/${userToDelete.id}`, apiBase).toString(), {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });

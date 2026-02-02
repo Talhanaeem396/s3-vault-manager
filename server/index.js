@@ -2,7 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import crypto from "crypto";
+import { fileURLToPath } from "url";
 import { ObjectId } from "mongodb";
 import { getDb, dbCheck } from "./db.js";
 import { uploadS3Object, deleteS3Object, getS3DownloadUrl, createS3Folder, deleteS3Prefix, copyS3Object, copyS3Prefix } from "./s3.js";
@@ -14,6 +16,8 @@ const app = express();
 const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:8080";
 const TOKEN_TTL_DAYS = Number(process.env.TOKEN_TTL_DAYS || 7);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(
   cors({
@@ -499,6 +503,14 @@ app.get("/api/admin/logs", requireAdmin, async (_req, res) => {
     res.status(500).json({ ok: false, error: "Failed to load logs" });
   }
 });
+
+const distPath = path.resolve(__dirname, "../dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 app.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
