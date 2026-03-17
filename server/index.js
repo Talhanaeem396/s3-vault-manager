@@ -223,15 +223,16 @@ app.get("/api/files/download", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/files/upload", requireAuth, async (req, res) => {
+app.post("/api/files/upload", express.raw({ limit: "500mb", type: "*/*" }), requireAuth, async (req, res) => {
   try {
-    const { key, content, contentType } = req.body || {};
+    const key = req.query.key;
+    const contentType = req.query.contentType;
     const safeKey = normalizeKey(key);
-    if (!safeKey || !content) {
+    if (!safeKey || !req.body || !req.body.length) {
       return res.status(400).json({ ok: false, error: "Missing key or content" });
     }
 
-    const buffer = Buffer.from(content, "base64");
+    const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
     await uploadS3Object(safeKey, buffer, contentType);
 
     const { files: filesCollection } = await getCollections();

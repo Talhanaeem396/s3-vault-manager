@@ -13,18 +13,6 @@ export function useS3() {
   const { toast } = useToast();
   const apiBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
-  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000;
-    let binary = '';
-
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-
-    return btoa(binary);
-  };
-
   const getAuthHeaders = () => {
     const token = localStorage.getItem('auth_token');
     return {
@@ -81,18 +69,16 @@ export function useS3() {
     try {
       const headers = getAuthHeaders();
       const url = new URL('/api/files/upload', apiBase);
-
-      const arrayBuffer = await file.arrayBuffer();
-      const base64 = arrayBufferToBase64(arrayBuffer);
+      url.searchParams.set('key', key);
+      url.searchParams.set('contentType', file.type);
 
       const response = await fetch(url.toString(), {
         method: 'POST',
-        headers,
-        body: JSON.stringify({
-          key,
-          content: base64,
-          contentType: file.type,
-        }),
+        headers: {
+          ...headers,
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
       });
 
       const data = await response.json();
