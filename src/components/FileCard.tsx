@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive, Copy, FolderInput, Play, Pencil } from 'lucide-react';
+import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive, Copy, FolderInput, Play, Pencil, ZoomIn } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,11 +69,16 @@ function getFileIcon(fileName: string) {
 }
 
 const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'];
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+const DOC_EXTS   = ['pdf', 'txt', 'md', 'doc', 'docx'];
 
-function isVideoFile(fileName: string) {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  return VIDEO_EXTS.includes(ext);
+function getExt(fileName: string) {
+  return fileName.split('.').pop()?.toLowerCase() || '';
 }
+
+function isVideoFile(fileName: string)    { return VIDEO_EXTS.includes(getExt(fileName)); }
+function isImageFile(fileName: string)    { return IMAGE_EXTS.includes(getExt(fileName)); }
+function isDocumentFile(fileName: string) { return DOC_EXTS.includes(getExt(fileName)); }
 
 export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopyTo, onPreview, onRename }: FileCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -85,7 +90,9 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
   const isFolder = file.key.endsWith('/');
   const fileKeyTrimmed = isFolder ? file.key.replace(/\/$/, '') : file.key;
   const fileName = fileKeyTrimmed.split('/').pop() || fileKeyTrimmed;
-  const isVideo = !isFolder && isVideoFile(fileName);
+  const isVideo    = !isFolder && isVideoFile(fileName);
+  const isImage    = !isFolder && isImageFile(fileName);
+  const isDocument = !isFolder && isDocumentFile(fileName);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -113,7 +120,7 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
         className="hover:shadow-md transition-shadow cursor-pointer group"
         onClick={() => {
           if (isFolder && onOpen) onOpen(file.key);
-          else if (isVideo && onPreview) onPreview(file.key);
+          else if ((isVideo || isImage || isDocument) && onPreview) onPreview(file.key);
         }}
       >
         <CardContent className="p-4">
@@ -128,6 +135,20 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="bg-black/60 rounded-full p-0.5">
                     <Play className="h-4 w-4 text-white fill-white" />
+                  </div>
+                </div>
+              )}
+              {isImage && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-black/60 rounded-full p-0.5">
+                    <ZoomIn className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              )}
+              {isDocument && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-primary/80 rounded-full p-0.5">
+                    <ZoomIn className="h-4 w-4 text-white" />
                   </div>
                 </div>
               )}
@@ -154,9 +175,9 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                {isVideo && onPreview && (
+                {(isVideo || isImage || isDocument) && onPreview && (
                   <DropdownMenuItem onClick={() => onPreview(file.key)}>
-                    <Play className="mr-2 h-4 w-4" />
+                    {isVideo ? <Play className="mr-2 h-4 w-4" /> : <ZoomIn className="mr-2 h-4 w-4" />}
                     Preview
                   </DropdownMenuItem>
                 )}

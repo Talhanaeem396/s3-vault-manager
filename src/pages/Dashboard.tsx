@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [filterDate, setFilterDate] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState('');
+  const [previewText, setPreviewText] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const publicBaseUrl = import.meta.env.VITE_S3_PUBLIC_BASE_URL;
@@ -191,10 +192,24 @@ export default function Dashboard() {
 
   const handlePreview = async (key: string) => {
     const name = key.split('/').pop() || key;
+    const ext = name.split('.').pop()?.toLowerCase() || '';
     setPreviewName(name);
+    setPreviewText(null);
     setPreviewUrl('loading');
     const url = await getFileUrl(key);
-    setPreviewUrl(url);
+    if (!url) { setPreviewUrl(null); return; }
+    if (ext === 'txt' || ext === 'md') {
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        setPreviewText(text);
+      } catch {
+        setPreviewText('Failed to load file content.');
+      }
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(url);
+    }
   };
 
   const handleCopyUrl = async (key: string) => {
@@ -463,29 +478,75 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Video Preview Dialog */}
-      <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) setPreviewUrl(null); }}>
-        <DialogContent className="max-w-4xl w-full p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="truncate text-sm font-medium">{previewName}</DialogTitle>
-          </DialogHeader>
-          <div className="bg-black flex items-center justify-center min-h-[300px]">
-            {previewUrl === 'loading' ? (
-              <Loader2 className="h-8 w-8 animate-spin text-white" />
-            ) : previewUrl ? (
-              <video
-                key={previewUrl}
-                src={previewUrl}
-                controls
-                autoPlay
-                className="w-full max-h-[70vh]"
-              />
-            ) : (
-              <p className="text-white/60 text-sm">Failed to load video</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Media & Document Preview Dialog */}
+      {(() => {
+        const ext = previewName.split('.').pop()?.toLowerCase() || '';
+        const isImg  = /^(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/.test(ext);
+        const isVid  = /^(mp4|webm|mov|avi|mkv|m4v)$/.test(ext);
+        const isPdf  = ext === 'pdf';
+        const isText = ext === 'txt' || ext === 'md';
+        const isOffice = ext === 'doc' || ext === 'docx';
+
+        return (
+          <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) { setPreviewUrl(null); setPreviewText(null); } }}>
+            <DialogContent className={`w-full p-0 overflow-hidden ${isText || isPdf || isOffice ? 'max-w-4xl' : 'max-w-4xl'}`}>
+              <DialogHeader className="px-4 pt-4 pb-2 border-b">
+                <DialogTitle className="truncate text-sm font-medium">{previewName}</DialogTitle>
+                <DialogDescription className="sr-only">Preview for {previewName}</DialogDescription>
+              </DialogHeader>
+
+              {previewUrl === 'loading' ? (
+                <div className="flex items-center justify-center min-h-[300px] bg-black">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+              ) : previewUrl ? (
+                <>
+                  {isImg && (
+                    <div className="bg-black flex items-center justify-center min-h-[300px]">
+                      <img src={previewUrl} alt={previewName} className="max-w-full max-h-[75vh] object-contain" />
+                    </div>
+                  )}
+                  {isVid && (
+                    <div className="bg-black">
+                      <video key={previewUrl} src={previewUrl} controls autoPlay className="w-full max-h-[70vh]" />
+                    </div>
+                  )}
+                  {isPdf && (
+                    <iframe
+                      key={previewUrl}
+                      src={previewUrl}
+                      className="w-full"
+                      style={{ height: '75vh' }}
+                      title={previewName}
+                    />
+                  )}
+                  {isOffice && (
+                    <iframe
+                      key={previewUrl}
+                      src={`https://docs.google.com/gview?url=${encodeURIComponent(previewUrl)}&embedded=true`}
+                      className="w-full"
+                      style={{ height: '75vh' }}
+                      title={previewName}
+                    />
+                  )}
+                  {isText && (
+                    <div className="overflow-auto" style={{ maxHeight: '75vh' }}>
+                      <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
+                        {previewText ?? 'Loading...'}
+                      </pre>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center justify-center min-h-[200px]">
+                  <p className="text-muted-foreground text-sm">Failed to load preview</p>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
 
       <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
         <DialogContent>
