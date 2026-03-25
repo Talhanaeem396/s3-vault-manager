@@ -6,6 +6,10 @@ import {
   GetObjectCommand,
   DeleteObjectsCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
@@ -141,6 +145,56 @@ export async function copyS3Object(sourceKey, destinationKey) {
     Bucket: AWS_S3_BUCKET,
     CopySource: `${AWS_S3_BUCKET}/${buildKey(sourceKey)}`,
     Key: buildKey(destinationKey),
+  });
+  await s3.send(command);
+}
+
+export async function createMultipartUpload(key, contentType) {
+  ensureS3Configured();
+  const command = new CreateMultipartUploadCommand({
+    Bucket: AWS_S3_BUCKET,
+    Key: buildKey(key),
+    ContentType: contentType || "application/octet-stream",
+  });
+  const result = await s3.send(command);
+  return result.UploadId;
+}
+
+export async function uploadPart(key, uploadId, partNumber, buffer) {
+  ensureS3Configured();
+  const command = new UploadPartCommand({
+    Bucket: AWS_S3_BUCKET,
+    Key: buildKey(key),
+    UploadId: uploadId,
+    PartNumber: partNumber,
+    Body: buffer,
+  });
+  const result = await s3.send(command);
+  return result.ETag;
+}
+
+export async function completeMultipartUpload(key, uploadId, parts) {
+  ensureS3Configured();
+  const command = new CompleteMultipartUploadCommand({
+    Bucket: AWS_S3_BUCKET,
+    Key: buildKey(key),
+    UploadId: uploadId,
+    MultipartUpload: {
+      Parts: parts.map(({ partNumber, etag }) => ({
+        PartNumber: partNumber,
+        ETag: etag,
+      })),
+    },
+  });
+  await s3.send(command);
+}
+
+export async function abortMultipartUpload(key, uploadId) {
+  ensureS3Configured();
+  const command = new AbortMultipartUploadCommand({
+    Bucket: AWS_S3_BUCKET,
+    Key: buildKey(key),
+    UploadId: uploadId,
   });
   await s3.send(command);
 }

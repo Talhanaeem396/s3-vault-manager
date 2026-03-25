@@ -17,7 +17,17 @@ import {
   Home,
   ChevronRight,
   Loader2,
+  ArrowUpDown,
+  CalendarDays,
+  X,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +60,8 @@ export default function Dashboard() {
   const [copySourceKey, setCopySourceKey] = useState('');
   const [copyDestination, setCopyDestination] = useState('');
   const [isCopying, setIsCopying] = useState(false);
+  const [sortBy, setSortBy] = useState('date-desc');
+  const [filterDate, setFilterDate] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
   const publicBaseUrl = import.meta.env.VITE_S3_PUBLIC_BASE_URL;
@@ -139,9 +151,26 @@ export default function Dashboard() {
 
   const pathParts = currentPath.split('/').filter(Boolean);
 
-  const filteredFiles = files.filter((file) =>
-    file.key.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter((file) => {
+      if (!file.key.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (filterDate) {
+        const fileDate = new Date(file.lastModified).toISOString().slice(0, 10);
+        if (fileDate !== filterDate) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'date-desc': return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
+        case 'date-asc':  return new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
+        case 'name-asc':  return a.key.localeCompare(b.key);
+        case 'name-desc': return b.key.localeCompare(a.key);
+        case 'size-desc': return (b.size ?? 0) - (a.size ?? 0);
+        case 'size-asc':  return (a.size ?? 0) - (b.size ?? 0);
+        default:          return 0;
+      }
+    });
 
   const buildPublicUrl = (key: string) => {
     if (!publicBaseUrl) return '';
@@ -266,7 +295,7 @@ export default function Dashboard() {
 
         <div className="rounded-xl border bg-card p-4 mb-6 shadow-sm">
           {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -275,6 +304,41 @@ export default function Dashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
+            </div>
+
+            {/* Sort */}
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-48">
+                <ArrowUpDown className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date-desc">Date — Newest first</SelectItem>
+                <SelectItem value="date-asc">Date — Oldest first</SelectItem>
+                <SelectItem value="name-asc">Name — A to Z</SelectItem>
+                <SelectItem value="name-desc">Name — Z to A</SelectItem>
+                <SelectItem value="size-desc">Size — Largest first</SelectItem>
+                <SelectItem value="size-asc">Size — Smallest first</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Date filter */}
+            <div className="relative w-full sm:w-48">
+              <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="pl-10 pr-8"
+              />
+              {filterDate && (
+                <button
+                  onClick={() => setFilterDate('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -318,8 +382,8 @@ export default function Dashboard() {
             <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No files found</h3>
             <p className="text-muted-foreground mb-4">
-              {searchQuery
-                ? 'Try a different search term'
+              {searchQuery || filterDate
+                ? 'Try a different search term or clear the date filter'
                 : 'Upload your first file to get started'}
             </p>
             {!searchQuery && (

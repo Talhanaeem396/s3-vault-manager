@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,27 @@ import { Upload, X, FileIcon, Loader2 } from 'lucide-react';
 interface UploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload: (key: string, file: File) => Promise<boolean>;
+  onUpload: (key: string, file: File, onProgress?: (percent: number) => void) => Promise<boolean>;
   currentPath: string;
 }
 
 export function UploadDialog({ open, onOpenChange, onUpload, currentPath }: UploadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Drive the progress bar locally so React always re-renders this component
+  useEffect(() => {
+    if (!isUploading) return;
+    let current = 0;
+    const id = setInterval(() => {
+      const step = Math.max(1, Math.round((90 - current) * 0.08));
+      current = Math.min(current + step, 90);
+      setUploadProgress(current);
+    }, 250);
+    return () => clearInterval(id);
+  }, [isUploading]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,17 +56,25 @@ export function UploadDialog({ open, onOpenChange, onUpload, currentPath }: Uplo
     if (!selectedFile) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
     const key = currentPath ? `${currentPath}${selectedFile.name}` : selectedFile.name;
     const success = await onUpload(key, selectedFile);
     setIsUploading(false);
 
     if (success) {
-      setSelectedFile(null);
-      onOpenChange(false);
+      setUploadProgress(100);
+      setTimeout(() => {
+        setSelectedFile(null);
+        setUploadProgress(0);
+        onOpenChange(false);
+      }, 600);
+    } else {
+      setUploadProgress(0);
     }
   };
 
   const handleClose = () => {
+    if (isUploading) return;
     setSelectedFile(null);
     onOpenChange(false);
   };
@@ -116,6 +137,21 @@ export function UploadDialog({ open, onOpenChange, onUpload, currentPath }: Uplo
             <Label>Destination</Label>
             <Input value={currentPath || '/'} disabled className="bg-muted" />
           </div>
+
+          {selectedFile && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{isUploading ? (uploadProgress === 100 ? 'Complete!' : 'Uploading...') : 'Ready to upload'}</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

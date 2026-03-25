@@ -7,7 +7,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { ObjectId } from "mongodb";
 import { getDb, dbCheck } from "./db.js";
-import { uploadS3Object, deleteS3Object, getS3DownloadUrl, createS3Folder, deleteS3Prefix, copyS3Object, copyS3Prefix } from "./s3.js";
+import { uploadS3Object, deleteS3Object, getS3DownloadUrl, createS3Folder, deleteS3Prefix, copyS3Object, copyS3Prefix, createMultipartUpload, uploadPart, completeMultipartUpload, abortMultipartUpload } from "./s3.js";
 
 dotenv.config();
 
@@ -262,6 +262,77 @@ app.post("/api/files/upload", express.raw({ limit: "500mb", type: "*/*" }), requ
       ok: false,
       error: error instanceof Error ? error.message : "Upload failed",
     });
+  }
+});
+
+app.post("/api/files/multipart/init", requireAuth, async (req, res) => {
+  try {
+    const key = normalizeKey(req.query.key);
+    const contentType = req.query.contentType;
+    if (!key) return res.status(400).json({ ok: false, error: "Missing key" });
+    const uploadId = await createMultipartUpload(key, contentType);
+    res.json({ ok: true, uploadId });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Failed to initiate upload" });
+  }
+});
+
+app.post("/api/files/multipart/part", express.raw({ limit: "11mb", type: "*/*" }), requireAuth, async (req, res) => {
+  try {
+    const key = normalizeKey(req.query.key);
+    const { uploadId } = req.query;
+    const partNumber = parseInt(req.query.partNumber, 10);
+    if (!key || !uploadId || !partNumber) {
+      return res.status(400).json({ ok: false, error: "Missing key, uploadId, or partNumber" });
+    }
+    const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+    const etag = await uploadPart(key, uploadId, partNumber, buffer);
+    res.json({ ok: true, etag });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Part upload failed" });
+  }
+});
+
+app.post("/api/files/multipart/complete", requireAuth, async (req, res) => {
+  try {
+    const { key: rawKey, uploadId, parts, size } = req.body;
+    const key = normalizeKey(rawKey);
+    if (!key || !uploadId || !parts) {
+      return res.status(400).json({ ok: false, error: "Missing required fields" });
+    }
+    await completeMultipartUpload(key, uploadId, parts);
+    const { files: filesCollection } = await getCollections();
+    const fileName = path.basename(key);
+    await filesCollection.updateOne(
+      { filePath: key },
+      {
+        $set: {
+          userId: new ObjectId(req.user.id),
+          filePath: key,
+          fileName,
+          size: size || 0,
+          isFolder: false,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+    await logFileAction("upload", key, fileName, req.user.id, { multipart: true });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Failed to complete upload" });
+  }
+});
+
+app.post("/api/files/multipart/abort", requireAuth, async (req, res) => {
+  try {
+    const { key: rawKey, uploadId } = req.body;
+    const key = normalizeKey(rawKey);
+    if (!key || !uploadId) return res.status(400).json({ ok: false, error: "Missing key or uploadId" });
+    await abortMultipartUpload(key, uploadId);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Failed to abort upload" });
   }
 });
 
