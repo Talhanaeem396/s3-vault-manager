@@ -293,6 +293,42 @@ export function useS3() {
     }
   }, [toast]);
 
+  const renameFile = useCallback(async (oldKey: string, newName: string): Promise<string | null> => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch(new URL('/api/files/rename', apiBase).toString(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ oldKey, newName }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Rename failed');
+      toast({ title: 'Renamed', description: `File renamed to ${newName}` });
+      return data.newKey as string;
+    } catch (error) {
+      toast({
+        title: 'Rename failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  }, [toast]);
+
+  const getFileUrl = useCallback(async (key: string): Promise<string | null> => {
+    try {
+      const headers = getAuthHeaders();
+      const url = new URL('/api/files/download', apiBase);
+      url.searchParams.set('key', key);
+      const response = await fetch(url.toString(), { headers });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to get URL');
+      return data.url as string;
+    } catch {
+      return null;
+    }
+  }, []);
+
   return {
     files,
     isLoading,
@@ -302,5 +338,7 @@ export function useS3() {
     deleteFile,
     createFolder,
     copyFile,
+    getFileUrl,
+    renameFile,
   };
 }

@@ -17,7 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive, Copy, FolderInput } from 'lucide-react';
+import { FileIcon, FolderIcon, MoreVertical, Download, Trash2, FileText, Image, Video, Music, Archive, Copy, FolderInput, Play, Pencil } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { formatDistanceToNow } from 'date-fns';
 
 interface FileCardProps {
@@ -31,6 +34,8 @@ interface FileCardProps {
   onCopyUrl?: (key: string) => void;
   onOpen?: (key: string) => void;
   onCopyTo?: (key: string) => void;
+  onPreview?: (key: string) => void;
+  onRename?: (key: string, newName: string) => Promise<void>;
 }
 
 function formatBytes(bytes: number): string {
@@ -63,21 +68,43 @@ function getFileIcon(fileName: string) {
   return <FileIcon className="h-8 w-8 text-muted-foreground" />;
 }
 
-export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopyTo }: FileCardProps) {
+const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'];
+
+function isVideoFile(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  return VIDEO_EXTS.includes(ext);
+}
+
+export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopyTo, onPreview, onRename }: FileCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+
   const isFolder = file.key.endsWith('/');
   const fileKeyTrimmed = isFolder ? file.key.replace(/\/$/, '') : file.key;
   const fileName = fileKeyTrimmed.split('/').pop() || fileKeyTrimmed;
+  const isVideo = !isFolder && isVideoFile(fileName);
 
   const handleDelete = async () => {
     setIsDeleting(true);
     const success = await onDelete(file.key);
     setIsDeleting(false);
-    if (success) {
-      setShowDeleteDialog(false);
-    }
+    if (success) setShowDeleteDialog(false);
+  };
+
+  const openRename = () => {
+    setRenameValue(fileName);
+    setShowRenameDialog(true);
+  };
+
+  const handleRename = async () => {
+    if (!renameValue.trim() || !onRename) return;
+    setIsRenaming(true);
+    await onRename(file.key, renameValue.trim());
+    setIsRenaming(false);
+    setShowRenameDialog(false);
   };
 
   return (
@@ -85,18 +112,24 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
       <Card
         className="hover:shadow-md transition-shadow cursor-pointer group"
         onClick={() => {
-          if (isFolder && onOpen) {
-            onOpen(file.key);
-          }
+          if (isFolder && onOpen) onOpen(file.key);
+          else if (isVideo && onPreview) onPreview(file.key);
         }}
       >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 relative">
               {isFolder ? (
                 <FolderIcon className="h-8 w-8 text-primary" />
               ) : (
                 getFileIcon(fileName)
+              )}
+              {isVideo && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-black/60 rounded-full p-0.5">
+                    <Play className="h-4 w-4 text-white fill-white" />
+                  </div>
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -120,7 +153,13 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {isVideo && onPreview && (
+                  <DropdownMenuItem onClick={() => onPreview(file.key)}>
+                    <Play className="mr-2 h-4 w-4" />
+                    Preview
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => onDownload(file.key)}>
                   <Download className="mr-2 h-4 w-4" />
                   Download
@@ -137,6 +176,12 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
                     Copy to...
                   </DropdownMenuItem>
                 )}
+                {!isFolder && onRename && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openRename(); }}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Rename
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
                   className="text-destructive focus:text-destructive"
@@ -149,6 +194,33 @@ export function FileCard({ file, onDownload, onDelete, onCopyUrl, onOpen, onCopy
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename file</DialogTitle>
+            <DialogDescription>Enter a new name for "{fileName}"</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="rename-input">New name</Label>
+            <Input
+              id="rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRenameDialog(false)} disabled={isRenaming}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={!renameValue.trim() || isRenaming}>
+              {isRenaming ? 'Renaming...' : 'Rename'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

@@ -49,7 +49,7 @@ import { Label } from '@/components/ui/label';
 
 export default function Dashboard() {
   const { user, signOut, isLoading: authLoading } = useAuth();
-  const { files, isLoading, listFiles, downloadFile, uploadFile, deleteFile, createFolder, copyFile } = useS3();
+  const { files, isLoading, listFiles, downloadFile, uploadFile, deleteFile, createFolder, copyFile, getFileUrl, renameFile } = useS3();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPath, setCurrentPath] = useState('');
   const [showUpload, setShowUpload] = useState(false);
@@ -62,6 +62,8 @@ export default function Dashboard() {
   const [isCopying, setIsCopying] = useState(false);
   const [sortBy, setSortBy] = useState('date-desc');
   const [filterDate, setFilterDate] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
   const publicBaseUrl = import.meta.env.VITE_S3_PUBLIC_BASE_URL;
@@ -180,6 +182,19 @@ export default function Dashboard() {
       .map((segment) => encodeURIComponent(segment))
       .join('/');
     return `${sanitizedBase}/${encodedPath}`;
+  };
+
+  const handleRename = async (key: string, newName: string) => {
+    const newKey = await renameFile(key, newName);
+    if (newKey) await listFiles(currentPath);
+  };
+
+  const handlePreview = async (key: string) => {
+    const name = key.split('/').pop() || key;
+    setPreviewName(name);
+    setPreviewUrl('loading');
+    const url = await getFileUrl(key);
+    setPreviewUrl(url);
   };
 
   const handleCopyUrl = async (key: string) => {
@@ -404,6 +419,8 @@ export default function Dashboard() {
                 onCopyUrl={handleCopyUrl}
                 onOpen={handleOpenFolder}
                 onCopyTo={handleCopyTo}
+                onPreview={handlePreview}
+                onRename={handleRename}
               />
             ))}
           </div>
@@ -443,6 +460,30 @@ export default function Dashboard() {
               {isCreatingFolder ? 'Creating...' : 'Create Folder'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video Preview Dialog */}
+      <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) setPreviewUrl(null); }}>
+        <DialogContent className="max-w-4xl w-full p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="truncate text-sm font-medium">{previewName}</DialogTitle>
+          </DialogHeader>
+          <div className="bg-black flex items-center justify-center min-h-[300px]">
+            {previewUrl === 'loading' ? (
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+            ) : previewUrl ? (
+              <video
+                key={previewUrl}
+                src={previewUrl}
+                controls
+                autoPlay
+                className="w-full max-h-[70vh]"
+              />
+            ) : (
+              <p className="text-white/60 text-sm">Failed to load video</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

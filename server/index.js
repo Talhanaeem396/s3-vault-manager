@@ -466,6 +466,49 @@ app.post("/api/files/copy", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/files/rename", requireAuth, async (req, res) => {
+  try {
+    const { oldKey: rawOld, newName } = req.body || {};
+    const oldKey = normalizeKey(rawOld);
+    if (!oldKey || !newName || typeof newName !== "string" || !newName.trim()) {
+      return res.status(400).json({ ok: false, error: "Missing oldKey or newName" });
+    }
+
+    const safeName = path.basename(newName.trim()).replace(/\/+/g, "-");
+    const dir = oldKey.includes("/") ? oldKey.slice(0, oldKey.lastIndexOf("/") + 1) : "";
+    const newKey = `${dir}${safeName}`;
+
+    if (oldKey === newKey) return res.json({ ok: true });
+
+    const { files: filesCollection } = await getCollections();
+    const sourceDoc = await filesCollection.findOne({ filePath: oldKey });
+
+    await copyS3Object(oldKey, newKey);
+    await deleteS3Object(oldKey);
+
+    await filesCollection.updateOne(
+      { filePath: newKey },
+      {
+        $set: {
+          userId: new ObjectId(req.user.id),
+          filePath: newKey,
+          fileName: safeName,
+          size: sourceDoc?.size || 0,
+          isFolder: false,
+          updatedAt: sourceDoc?.updatedAt || new Date(),
+        },
+      },
+      { upsert: true }
+    );
+    await filesCollection.deleteOne({ filePath: oldKey });
+    await logFileAction("rename", newKey, safeName, req.user.id, { from: oldKey });
+
+    res.json({ ok: true, newKey });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Rename failed" });
+  }
+});
+
 app.delete("/api/files", requireAuth, async (req, res) => {
   try {
     const key = normalizeKey(req.query.key);
